@@ -37,7 +37,10 @@ RUN pnpm prune --prod --ignore-scripts
 
 
 # ---- production stage ----
-FROM prod-deps AS bolt-ai-production
+# Based on `build`, not `prod-deps`: the CMD below is `pnpm run dockerstart`, which
+# runs `wrangler pages dev`. wrangler is a devDependency, so `pnpm prune --prod`
+# removes it and the pruned image dies at startup with "wrangler: not found".
+FROM build AS bolt-ai-production
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -57,15 +60,16 @@ ENV WRANGLER_SEND_METRICS=false \
 # Note: API keys should be provided at runtime via docker run -e or docker-compose
 # Example: docker run -e OPENAI_API_KEY=your_key_here ...
 
-# Install curl for healthchecks and copy bindings script
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# Install curl for healthchecks and the CA bundle workerd needs for outbound TLS.
+# --no-install-recommends drops ca-certificates (only a curl Recommends), and
+# workerd validates against the system store, so without it every HTTPS provider
+# fetch fails with "TLS peer's certificate is not trusted" (Node is unaffected
+# because it ships its own bundle).
+RUN apt-get update && apt-get install -y --no-install-recommends curl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy built files and scripts
-COPY --from=prod-deps /app/build /app/build
-COPY --from=prod-deps /app/node_modules /app/node_modules
-COPY --from=prod-deps /app/package.json /app/package.json
-COPY --from=prod-deps /app/bindings.sh /app/bindings.sh
+# /app already carries build/, node_modules/, package.json and bindings.sh from the
+# build stage; nothing to copy.
 
 # Pre-configure wrangler to disable metrics
 RUN mkdir -p /root/.config/.wrangler && \
