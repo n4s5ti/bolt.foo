@@ -1,3 +1,14 @@
+# Rootless-podman note (fork-local): base-provider.ts resolveDockerUrl() rewrites
+# localhost/127.0.0.1 provider URLs to host.docker.internal whenever
+# RUNNING_IN_DOCKER is true. Under rootless podman that name resolves to the pasta
+# gateway (169.254.1.2), which cannot reach host-loopback-bound services such as
+# Ollama on 127.0.0.1:11434, so the rewrite breaks every local provider.
+# RUNNING_IN_DOCKER is therefore interpolated from ./.env (default true, matching
+# Docker Desktop). Setting it false is necessary but not sufficient: the container
+# also needs pasta outbound loopback forwarding (--network=pasta:-T,11434), which
+# has no portable Compose spelling. The supported start route on a rootless-podman
+# host is the quadlet unit ~/.config/containers/systemd/bolt-foo.container.
+
 services:
   app-prod:
     image: bolt-ai:production
@@ -28,7 +39,7 @@ services:
       - AWS_BEDROCK_CONFIG=${AWS_BEDROCK_CONFIG}
       - VITE_LOG_LEVEL=${VITE_LOG_LEVEL:-debug}
       - DEFAULT_NUM_CTX=${DEFAULT_NUM_CTX:-32768}
-      - RUNNING_IN_DOCKER=true
+      - RUNNING_IN_DOCKER=${RUNNING_IN_DOCKER:-true}
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     command: pnpm run dockerstart
@@ -65,7 +76,7 @@ services:
       - AWS_BEDROCK_CONFIG=${AWS_BEDROCK_CONFIG}
       - VITE_LOG_LEVEL=${VITE_LOG_LEVEL:-debug}
       - DEFAULT_NUM_CTX=${DEFAULT_NUM_CTX:-32768}
-      - RUNNING_IN_DOCKER=true
+      - RUNNING_IN_DOCKER=${RUNNING_IN_DOCKER:-true}
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     volumes:
@@ -90,7 +101,7 @@ services:
       - PORT=5173
       - OLLAMA_API_BASE_URL=http://127.0.0.1:11434
       - DEFAULT_NUM_CTX=${DEFAULT_NUM_CTX:-32768}
-      - RUNNING_IN_DOCKER=true
+      - RUNNING_IN_DOCKER=${RUNNING_IN_DOCKER:-true}
     extra_hosts:
       - 'host.docker.internal:host-gateway'
     command: pnpm run dockerstart
